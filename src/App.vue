@@ -1,13 +1,14 @@
 <template>
   <el-container class="app-container">
     <!-- Sidebar -->
-    <el-aside width="220px" class="app-aside">
+    <el-aside :width="isCollapse ? '64px' : '220px'" class="app-aside">
       <div class="logo">
         <el-icon :size="28"><TrendCharts /></el-icon>
-        <span>Duo Fundings</span>
+        <span v-show="!isCollapse">Duo Fundings</span>
       </div>
       <el-menu
         :default-active="route.path"
+        :collapse="isCollapse"
         router
         background-color="#1d1e2c"
         text-color="#a3a6b4"
@@ -15,15 +16,15 @@
       >
         <el-menu-item index="/">
           <el-icon><DataBoard /></el-icon>
-          <span>基金总览</span>
+          <template #title>基金总览</template>
         </el-menu-item>
         <el-menu-item index="/funds">
           <el-icon><List /></el-icon>
-          <span>基金列表</span>
+          <template #title>基金列表</template>
         </el-menu-item>
         <el-menu-item index="/compare">
           <el-icon><DataAnalysis /></el-icon>
-          <span>收益对比</span>
+          <template #title>收益对比</template>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -32,6 +33,10 @@
     <el-container>
       <el-header class="app-header">
         <div class="header-left">
+          <el-icon class="collapse-btn" @click="isCollapse = !isCollapse">
+            <Fold v-if="!isCollapse" />
+            <Expand v-else />
+          </el-icon>
           <el-breadcrumb separator="/">
             <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
             <el-breadcrumb-item v-if="route.meta.title">{{ route.meta.title }}</el-breadcrumb-item>
@@ -52,9 +57,11 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+const isCollapse = ref(false)
 </script>
 
 <style>
@@ -80,17 +87,21 @@ html, body, #app {
   background-color: #1d1e2c;
   overflow-y: auto;
   border-right: 1px solid #2d2e3e;
+  transition: width 0.3s;
 }
 
 .logo {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   padding: 20px 24px;
   color: #fff;
   font-size: 18px;
   font-weight: 700;
   border-bottom: 1px solid #2d2e3e;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .logo .el-icon {
@@ -110,6 +121,23 @@ html, body, #app {
   border-bottom: 1px solid #e8e8e8;
   padding: 0 24px;
   height: 56px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.collapse-btn {
+  font-size: 20px;
+  cursor: pointer;
+  color: #606266;
+  transition: color 0.2s;
+}
+
+.collapse-btn:hover {
+  color: #409eff;
 }
 
 .header-right {
