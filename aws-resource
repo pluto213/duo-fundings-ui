@@ -1,0 +1,31 @@
+ECR
+duo-aws-repo
+127348475166.dkr.ecr.ap-southeast-2.amazonaws.com/duo-fundings-ui
+
+
+Jenkins EC2
+
+docker run -d \
+  --name jenkins \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --group-add $(getent group docker | cut -d: -f3) \
+  aws-jenkins:lts
+
+docker exec -it jenkins bash
+aws --version
+aws sts get-caller-identity --no-cli-pager
+==>
+jenkins@e7b6b12012cc:/$ aws sts get-caller-identity --no-cli-pager
+{
+    "UserId": "AROAR3JUPQUPJV5EQIOXZ:i-02efcad85e98a2514",
+    "Account": "127348475166",
+    "Arn": "arn:aws:sts::127348475166:assumed-role/JenkinsEC2/i-02efcad85e98a2514"
+}
+<===
+
+
+
