@@ -6,6 +6,9 @@ pipeline {
         AWS_ACCOUNT_ID = '127348475166'
         ECR_REPO = 'duo-fundings-ui'
         ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
+        ECS_CLUSTER = 'duo-cluster'
+        ECS_SERVICE = 'duo-fundings-ui-task-service'
+        ECS_TASK_DEF = 'duo-fundings-ui-task'
     }
 
     stages {
@@ -65,6 +68,52 @@ pipeline {
                 docker push ${ECR_URI}:${GIT_SHA}
                 docker push ${ECR_URI}:test
                 """
+            }
+        }
+
+        stage('Deploy to ECS') {
+            steps {
+                sh '''
+                export AWS_PAGER=""
+
+                # 1. 获取当前 task definition
+                aws ecs describe-task-definition \
+                    --task-definition ${ECS_TASK_DEF} \
+                    --region ${AWS_REGION} \
+                    --query 'taskDefinition' \
+                    --output json | \
+                jq '.containerDefinitions[0].image = "'"${ECR_URI}:${GIT_SHA}"'"' | \
+                jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
+                > new-task-def.json
+
+                # 2. 注册新的 task definition
+                NEW_TASK_DEF=$(aws ecs register-task-definition \
+                    --cli-input-json file://new-task-def.json \
+                    --region ${AWS_REGION} \
+                    --query 'taskDefinition.taskDefinitionArn' \
+                    --output text)
+
+                echo "New task definition: $NEW_TASK_DEF"
+
+                # 3. 更新 ECS 服务
+                aws ecs update-service \
+                    --cluster ${ECS_CLUSTER} \
+                    --service ${ECS_SERVICE} \
+                    --task-definition $NEW_TASK_DEF \
+                    --region ${AWS_REGION} \
+                    --query 'service.taskDefinition' \
+                    --output text
+
+                echo "✅ ECS service updated"
+
+                # 4. 等待部署稳定
+                aws ecs wait services-stable \
+                    --cluster ${ECS_CLUSTER} \
+                    --services ${ECS_SERVICE} \
+                    --region ${AWS_REGION}
+
+                echo "✅ ECS deployment stable"
+                '''
             }
         }
     }
