@@ -73,33 +73,38 @@ pipeline {
 
         stage('Deploy to ECS') {
             steps {
-                sh '''
+                sh """
                 export AWS_PAGER=""
 
-                # 1. 获取当前 task definition
+                # 1. 获取当前 task definition 并替换镜像
                 aws ecs describe-task-definition \
                     --task-definition ${ECS_TASK_DEF} \
                     --region ${AWS_REGION} \
                     --query 'taskDefinition' \
                     --output json | \
-                jq '.containerDefinitions[0].image = "'"${ECR_URI}:${GIT_SHA}"'"' | \
-                jq 'del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)' \
-                > new-task-def.json
+                python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+data['containerDefinitions'][0]['image'] = '${ECR_URI}:${GIT_SHA}'
+for key in ['taskDefinitionArn','revision','status','requiresAttributes','compatibilities','registeredAt','registeredBy']:
+    data.pop(key, None)
+json.dump(data, sys.stdout)
+" > new-task-def.json
 
                 # 2. 注册新的 task definition
-                NEW_TASK_DEF=$(aws ecs register-task-definition \
+                NEW_TASK_DEF=\$(aws ecs register-task-definition \
                     --cli-input-json file://new-task-def.json \
                     --region ${AWS_REGION} \
                     --query 'taskDefinition.taskDefinitionArn' \
                     --output text)
 
-                echo "New task definition: $NEW_TASK_DEF"
+                echo "New task definition: \$NEW_TASK_DEF"
 
                 # 3. 更新 ECS 服务
                 aws ecs update-service \
                     --cluster ${ECS_CLUSTER} \
                     --service ${ECS_SERVICE} \
-                    --task-definition $NEW_TASK_DEF \
+                    --task-definition \$NEW_TASK_DEF \
                     --region ${AWS_REGION} \
                     --query 'service.taskDefinition' \
                     --output text
@@ -113,7 +118,7 @@ pipeline {
                     --region ${AWS_REGION}
 
                 echo "✅ ECS deployment stable"
-                '''
+                """
             }
         }
     }
