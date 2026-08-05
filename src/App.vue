@@ -26,6 +26,10 @@
           <el-icon><DataAnalysis /></el-icon>
           <template #title>收益对比</template>
         </el-menu-item>
+        <el-menu-item index="/holding-test">
+          <el-icon><Wallet /></el-icon>
+          <template #title>持仓测试</template>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 

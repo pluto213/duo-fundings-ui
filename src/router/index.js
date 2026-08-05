@@ -24,6 +24,12 @@ const routes = [
     name: 'FundCompare',
     component: () => import('@/views/FundCompare.vue'),
     meta: { title: '收益对比' }
+  },
+  {
+    path: '/holding-test',
+    name: 'HoldingTest',
+    component: () => import('@/views/HoldingTest.vue'),
+    meta: { title: '持仓测试' }
   }
 ]
 
