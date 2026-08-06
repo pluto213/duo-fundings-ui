@@ -64,24 +64,17 @@
           stripe
           style="width: 100%"
           row-key="id"
-          @expand-change="handleExpandChange"
         >
           <!-- 展开行：显示持仓股票明细 -->
           <el-table-column type="expand">
             <template #default="{ row }">
               <div class="expand-content">
-                <div v-if="row._loadingDetail" class="expand-loading">
-                  <el-skeleton :rows="3" animated />
-                </div>
-                <div v-else-if="row._detailError" class="expand-error">
-                  <el-alert :title="row._detailError" type="error" show-icon :closable="false" />
-                </div>
-                <div v-else-if="row._estimateDetail && row._estimateDetail.holdings && row._estimateDetail.holdings.length">
+                <div v-if="row.stock_holdings && row.stock_holdings.length">
                   <div class="expand-header">
                     <span class="expand-title">持仓股票明细</span>
-                    <span class="expand-subtitle">报告期: {{ row._estimateDetail.report_date || '-' }}</span>
+                    <span class="expand-subtitle">报告期: {{ row.report_date || '-' }}</span>
                   </div>
-                  <el-table :data="row._estimateDetail.holdings" size="small" border>
+                  <el-table :data="row.stock_holdings" size="small" border>
                     <el-table-column prop="stock_code" label="股票代码" width="100" />
                     <el-table-column prop="stock_name" label="股票名称" width="120" />
                     <el-table-column prop="weight" label="持仓占比" width="100" align="right">
@@ -96,8 +89,8 @@
                     </el-table-column>
                     <el-table-column label="个股涨跌幅" width="120" align="right">
                       <template #default="{ row: stock }">
-                        <span v-if="stock.stock_return != null" :class="stock.stock_return >= 0 ? 'profit' : 'loss'">
-                          {{ stock.stock_return >= 0 ? '+' : '' }}{{ (stock.stock_return * 100).toFixed(2) }}%
+                        <span v-if="stock.change_pct != null" :class="stock.change_pct >= 0 ? 'profit' : 'loss'">
+                          {{ stock.change_pct >= 0 ? '+' : '' }}{{ stock.change_pct.toFixed(2) }}%
                         </span>
                         <span v-else>-</span>
                       </template>
@@ -183,10 +176,7 @@
       width="700px"
       destroy-on-close
     >
-      <div v-if="dialogLoading" class="dialog-loading">
-        <el-skeleton :rows="5" animated />
-      </div>
-      <div v-else-if="dialogData">
+      <div v-if="dialogData">
         <div class="dialog-summary">
           <el-descriptions :column="3" border size="small">
             <el-descriptions-item label="基金代码">{{ dialogData.fund_code }}</el-descriptions-item>
@@ -204,17 +194,12 @@
 
         <el-divider content-position="left">持仓股票明细</el-divider>
 
-        <el-table :data="dialogData.holdings || []" size="small" border max-height="400">
+        <el-table :data="dialogData.stock_holdings || []" size="small" border max-height="400">
           <el-table-column prop="stock_code" label="股票代码" width="100" />
           <el-table-column prop="stock_name" label="股票名称" width="120" />
           <el-table-column prop="weight" label="持仓占比" width="100" align="right">
             <template #default="{ row }">
               {{ (row.weight * 100).toFixed(2) }}%
-            </template>
-          </el-table-column>
-          <el-table-column prop="report_price" label="报告期价格" width="110" align="right">
-            <template #default="{ row }">
-              {{ row.report_price ? row.report_price.toFixed(2) : '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="current_price" label="当前价格" width="100" align="right">
@@ -224,8 +209,8 @@
           </el-table-column>
           <el-table-column label="个股涨跌幅" width="120" align="right">
             <template #default="{ row }">
-              <span v-if="row.stock_return != null" :class="row.stock_return >= 0 ? 'profit' : 'loss'" style="font-weight: 600;">
-                {{ row.stock_return >= 0 ? '+' : '' }}{{ (row.stock_return * 100).toFixed(2) }}%
+              <span v-if="row.change_pct != null" :class="row.change_pct >= 0 ? 'profit' : 'loss'" style="font-weight: 600;">
+                {{ row.change_pct >= 0 ? '+' : '' }}{{ row.change_pct.toFixed(2) }}%
               </span>
               <span v-else>-</span>
             </template>
@@ -240,7 +225,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getHoldings, getPortfolioSummary } from '@/api/holding'
-import { getEstimatedReturn } from '@/api/fund'
 
 const holdings = ref([])
 const summary = ref({
@@ -255,7 +239,6 @@ const error = ref(null)
 
 // 弹窗相关
 const dialogVisible = ref(false)
-const dialogLoading = ref(false)
 const dialogData = ref(null)
 const dialogTitle = ref('')
 
@@ -273,12 +256,7 @@ async function fetchData() {
       getHoldings({ with_estimate: true }),
       getPortfolioSummary()
     ])
-    holdings.value = (holdingsData.holdings || []).map(h => ({
-      ...h,
-      _loadingDetail: false,
-      _detailError: null,
-      _estimateDetail: null
-    }))
+    holdings.value = holdingsData.holdings || []
     summary.value = summaryData
   } catch (err) {
     error.value = err.response?.data?.detail || err.message || '获取数据失败'
@@ -288,39 +266,11 @@ async function fetchData() {
   }
 }
 
-// 展开行时加载明细
-async function handleExpandChange(row, expandedRows) {
-  const isExpanded = expandedRows.some(r => r.id === row.id)
-  if (!isExpanded || row._estimateDetail || row._loadingDetail) return
-
-  row._loadingDetail = true
-  row._detailError = null
-
-  try {
-    const data = await getEstimatedReturn(row.fund_code)
-    row._estimateDetail = data
-  } catch (err) {
-    row._detailError = err.response?.data?.detail || err.message || '获取明细失败'
-  } finally {
-    row._loadingDetail = false
-  }
-}
-
-// 弹窗查看详情
-async function showEstimateDialog(row) {
+// 弹窗查看详情（直接用已有数据）
+function showEstimateDialog(row) {
   dialogTitle.value = `${row.fund_name || row.fund_code} - 估算收益明细`
+  dialogData.value = row
   dialogVisible.value = true
-  dialogLoading.value = true
-  dialogData.value = null
-
-  try {
-    const data = await getEstimatedReturn(row.fund_code)
-    dialogData.value = data
-  } catch (err) {
-    dialogData.value = { error: err.response?.data?.detail || err.message || '获取失败' }
-  } finally {
-    dialogLoading.value = false
-  }
 }
 
 onMounted(() => {
@@ -427,8 +377,6 @@ onMounted(() => {
   color: #909399;
 }
 
-.expand-loading,
-.expand-error,
 .expand-empty {
   padding: 12px 0;
   color: #909399;
@@ -436,10 +384,6 @@ onMounted(() => {
 }
 
 /* 弹窗 */
-.dialog-loading {
-  padding: 20px;
-}
-
 .dialog-summary {
   margin-bottom: 16px;
 }
